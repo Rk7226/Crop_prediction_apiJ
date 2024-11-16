@@ -5,10 +5,11 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Copy all files including model directory
 COPY . .
 
-# Create necessary directories
-RUN mkdir -p model data
+# Verify model files exist
+RUN ls -la model/
 
 EXPOSE 8000
 

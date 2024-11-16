@@ -1,3 +1,4 @@
+import os
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
@@ -18,18 +19,15 @@ app = FastAPI(
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allows all origins
+    allow_origins=["*"],
     allow_credentials=True,
-    allow_methods=["*"],  # Allows all methods
-    allow_headers=["*"],  # Allows all headers
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
-# Load model and scaler
-try:
-    model = pickle.load(open('model/random_forest_model.pkl', 'rb'))
-    scaler = pickle.load(open('model/scaler.pkl', 'rb'))
-except Exception as e:
-    print(f"Error loading model files: {str(e)}")
+# Global variables for model and scaler
+model = None
+scaler = None
 
 # Input validation model
 class SoilData(BaseModel):
@@ -63,6 +61,27 @@ crop_dict = {
     19: "pomegranate", 20: "rice", 21: "watermelon"
 }
 
+@app.on_event("startup")
+async def load_model():
+    """Load the model and scaler on startup"""
+    global model, scaler
+    try:
+        model_path = os.path.join(os.path.dirname(__file__), "model", "random_forest_model.pkl")
+        scaler_path = os.path.join(os.path.dirname(__file__), "model", "scaler.pkl")
+        
+        if not os.path.exists(model_path) or not os.path.exists(scaler_path):
+            raise FileNotFoundError("Model or scaler file not found")
+            
+        with open(model_path, 'rb') as model_file:
+            model = pickle.load(model_file)
+        with open(scaler_path, 'rb') as scaler_file:
+            scaler = pickle.load(scaler_file)
+            
+        print("Model and scaler loaded successfully!")
+    except Exception as e:
+        print(f"Error loading model files: {str(e)}")
+        # Don't raise the error here, let the health check endpoint handle it
+
 @app.get("/")
 async def root():
     """Welcome endpoint with API information"""
@@ -75,13 +94,22 @@ async def root():
 @app.get("/health")
 async def health_check():
     """Health check endpoint"""
+    if model is None or scaler is None:
+        raise HTTPException(
+            status_code=503, 
+            detail="Model or scaler not loaded. Please ensure model files exist in the correct location."
+        )
     return {"status": "healthy"}
 
 @app.post("/predict")
 async def predict_crop(data: SoilData):
-    """
-    Predict the most suitable crop based on soil and climate conditions
-    """
+    """Predict the most suitable crop based on soil and climate conditions"""
+    if model is None or scaler is None:
+        raise HTTPException(
+            status_code=503, 
+            detail="Model or scaler not loaded. Please check health endpoint for status."
+        )
+        
     try:
         # Convert input data to array
         features = np.array([
@@ -121,8 +149,10 @@ async def predict_crop(data: SoilData):
         }
         
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(
+            status_code=500, 
+            detail=f"Error making prediction: {str(e)}"
+        )
 
-# Run the application
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
