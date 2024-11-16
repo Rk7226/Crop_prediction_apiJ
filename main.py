@@ -66,21 +66,23 @@ async def load_model():
     """Load the model and scaler on startup"""
     global model, scaler
     try:
+        print("Loading model files...")
         model_path = os.path.join(os.path.dirname(__file__), "model", "random_forest_model.pkl")
         scaler_path = os.path.join(os.path.dirname(__file__), "model", "scaler.pkl")
         
+        print(f"Model path: {model_path}")
+        print(f"Scaler path: {scaler_path}")
+        
         if not os.path.exists(model_path) or not os.path.exists(scaler_path):
-            raise FileNotFoundError("Model or scaler file not found")
-            
-        with open(model_path, 'rb') as model_file:
-            model = pickle.load(model_file)
-        with open(scaler_path, 'rb') as scaler_file:
-            scaler = pickle.load(scaler_file)
-            
+            print("Model files not found, training new model...")
+            from train_model import train_and_save_model
+            train_and_save_model()
+        
+        model = joblib.load(model_path)
+        scaler = joblib.load(scaler_path)
         print("Model and scaler loaded successfully!")
     except Exception as e:
         print(f"Error loading model files: {str(e)}")
-        # Don't raise the error here, let the health check endpoint handle it
 
 @app.get("/")
 async def root():
