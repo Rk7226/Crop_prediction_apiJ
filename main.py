@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 import numpy as np
 import pandas as pd
+import joblib  # Added import for joblib
 from sklearn.preprocessing import MinMaxScaler
 import pickle
 import uvicorn
@@ -67,12 +68,19 @@ async def load_model():
     global model, scaler
     try:
         print("Loading model files...")
-        model_path = os.path.join(os.path.dirname(__file__), "model", "random_forest_model.pkl")
-        scaler_path = os.path.join(os.path.dirname(__file__), "model", "scaler.pkl")
+        # Adjust paths to be absolute
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        model_dir = os.path.join(current_dir, "model")
+        model_path = os.path.join(model_dir, "random_forest_model.pkl")
+        scaler_path = os.path.join(model_dir, "scaler.pkl")
         
         print(f"Model path: {model_path}")
         print(f"Scaler path: {scaler_path}")
         
+        # Check if model directory exists
+        if not os.path.exists(model_dir):
+            os.makedirs(model_dir)
+            
         if not os.path.exists(model_path) or not os.path.exists(scaler_path):
             print("Model files not found, training new model...")
             from train_model import train_and_save_model
@@ -83,6 +91,10 @@ async def load_model():
         print("Model and scaler loaded successfully!")
     except Exception as e:
         print(f"Error loading model files: {str(e)}")
+        raise HTTPException(
+            status_code=503,
+            detail=f"Error loading model files: {str(e)}"
+        )
 
 @app.get("/")
 async def root():
